@@ -18,4 +18,5 @@ class User(db.Model):
             # do not serialize the password, its a security breach
         }
         
-    # lets comment
+    # lets start new classes
+    
