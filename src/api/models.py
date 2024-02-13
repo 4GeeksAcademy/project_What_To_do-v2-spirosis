@@ -8,10 +8,14 @@ class User(db.Model):
     password = db.Column(db.String(80), unique=False, nullable=False)
     first_name = db.Column(db.String(80), unique=False)
     last_name = db.Column(db.String(80), unique=False)
+    biography = db.Column(db.String(), unique=False)
     perm_location = db.Column(db.String(80), unique=False)
     places_visited = db.Column(db.ARRAY(db.String()), unique=False)
     wishlist_places = db.Column(db.ARRAY(db.String()), unique=False)
     reset_token = db.Column(db.String(200))
+
+    post = db.relationship( "Post",  back_populates="user")
+    comment = db.relationship("Comment", back_populates="user")
 
     def __repr__(self):
         return f'<User {self.email}>'
@@ -22,6 +26,7 @@ class User(db.Model):
             "email": self.email,
             "first_name": self.first_name,
             "last_name": self.last_name,
+            "biography" : self.biography,
             "permanent_location": self.perm_location,
             "places_visited": self.places_visited,
             "wishlist_places": self.wishlist_places,
@@ -35,8 +40,7 @@ class User(db.Model):
     
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    user = db.relationship(User)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     place_name = db.Column(db.String(200))
     description = db.Column(db.String(200))
     
@@ -46,6 +50,9 @@ class Post(db.Model):
     social_media = db.Column(db.String)
     created_at = db.Column(db.Date)
     modified_at = db.Column(db.Date)
+
+    user = db.relationship("User", back_populates= "post")
+    comment = db.relationship("Comment", back_populates= "post")
 
     def __repr__(self):
         return f'<Post {self.place_name}>'
@@ -66,11 +73,12 @@ class Post(db.Model):
 class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    user = db.relationship(User)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'))
-    post = db.relationship(Post)
     comment = db.Column(db.Text)
     created_at = db.Column(db.Date)
+
+    post = db.relationship("Post", back_populates= "comment")
+    user = db.relationship("User", back_populates="comment")
 
     def __repr__(self):
         return f'<Comment {self.user_id}>'

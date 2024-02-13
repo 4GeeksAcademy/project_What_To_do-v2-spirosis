@@ -18,6 +18,9 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 import os
 from dotenv import load_dotenv
 
+
+from api.emailManager import send_email
+
 api = Blueprint('api', __name__)
 
 # Allow CORS requests to this API
@@ -70,26 +73,6 @@ def getComments(post_id):
 
 
     return jsonify(singlePost), 200
-
-@api.route('/signup', methods=['POST'])
-def createUser():
-    first_name = request.json.get('first_name')
-    last_name = request.json.get('last_name')
-    password = request.json.get('password')
-    email = request.json.get('email')
-
-    user = User.query.filter_by(email=email).first()
-    if user != None:
-        return jsonify({"msg": "email exist"}), 401
-    user= User(first_name=first_name, last_name=last_name, password=password, email=email)
-    db.session.add(user)
-    db.session.commit()
-    
-    response_body ={
-        "msg": "User successfully added"
-    }
-
-    return jsonify(response_body), 200
 
 @api.route('/createpost', methods=['POST'])
 @jwt_required()
@@ -150,3 +133,260 @@ def createComment():
     }
 
     return jsonify(response_body), 200
+
+#signUp
+@api.route('/signup', methods=['POST'])
+def createUser():
+    first_name = request.json.get("first_name")
+    last_name = request.json.get("last_name")
+    password = request.json.get("password")
+    email = request.json.get("email")
+
+    user = User.query.filter_by(email=email).first()
+    if user != None:
+        return jsonify({"msg": "email exists"}), 401
+    
+    user = User(first_name=first_name, last_name=last_name ,password=password, email = email)
+    db.session.add(user)
+    db.session.commit()
+    
+    response_body = {
+        "msg": "User successfully added"
+    }
+
+    return jsonify(response_body), 200
+
+
+#login
+@api.route('/token', methods=['POST'])
+def create_token():
+    email = request.json.get("email")
+    password = request.json.get("password")
+    
+    user = User.query.filter_by(email=email, password=password).first()
+    if user is None:
+        
+        return jsonify({"msg": "Bad email or password"}), 401
+    
+  
+    access_token = create_access_token(identity=user.id)
+    return jsonify({ "token": access_token, "user_id": user.id }) ,200
+
+
+@api.route("/private", methods=["GET"])
+@jwt_required()
+def protected():
+    current_user_id = get_jwt_identity()
+    print(current_user_id)    
+    user = User.query.get(current_user_id)
+
+    if user == None:
+        response_body = {
+            "msg": "Please login to continue"
+        }
+        return jsonify(response_body)
+    response_body = {
+        "msg": "Success!", "user":user.serialize()
+    }
+    return jsonify(response_body),200
+    
+@api.route('/edit_user', methods=[ 'PUT'])
+@jwt_required()
+def edit_user():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+
+    if user is None:
+        return jsonify({"msg":"user does not exist"}), 404
+
+    # Update user fields based on the JSON data (assuming JSON payload)
+    data = request.get_json()
+    user.first_name = data.get('first_name')
+    user.last_name = data.get('last_name')
+    user.biography = data.get('biography')
+    user.perm_location = data.get('perm_location')
+    # user.places_visited = data.get('places_visited')
+    # user.wishlist_places = data.get('wishlist_places')
+
+    # Update other fields as needed
+    db.session.commit()
+    user = User.query.get(current_user_id)
+    response_body = {
+        "msg": "Success!", "user":user.serialize()
+    }
+    return jsonify(response_body),200
+
+
+
+#forgot password
+# @api.route('/forgotpassword', methods=['POST'])
+# def forgotpassword():
+#     try:
+#         body = request.get_json()
+#         email = body.get("email")
+#         load_dotenv()
+
+#         if not email:
+#             print("No email was provided")
+#             return jsonify({"message": "No email was provided"}), 400
+
+#         user = User.query.filter_by(email=email).first()
+#         if not user:
+#             print("User doesn't exist")
+#             return jsonify({"message": "User doesn't exist"}), 404
+
+#         expiration_time = datetime.utcnow() + timedelta(hours=1)
+#         payload = {
+#             'email': email,
+#             'exp': expiration_time.timestamp(), 
+#         }
+
+        
+    #     reset_token = str(uuid.uuid4())
+
+    #     user.reset_token = quote(reset_token)
+    #     db.session.commit()
+
+    #     payload['reset_token'] = quote(reset_token)
+
+    #     access_token = create_access_token(identity=payload)
+
+    #     FRONTEND_URL = os.getenv('FRONTEND_URL')
+    #     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
+
+
+    #     URL_TOKEN = f"{FRONTEND_URL}/resetpassword?token={access_token}"
+
+    #     email_receiver = email
+    #     email_subject = "Reset your password"
+    #     email_body = f"Hello, you requested a password reset. If you did not request this, please ignore this email.\n\n"
+    #     email_body += f"We have sent you this link to reset your password:\n\n"
+    #     email_body += f"Link: {URL_TOKEN}\n\n"
+    #     email_body += f"This token is valid for 1 hour. After expiration, you will need to request another password reset.\n\n"
+    #     email_body += f'Sincerely,\nTravel Buddy'
+
+    #     message = EmailMessage()
+    #     message.set_content(email_body)
+    #     message['Subject'] = email_subject
+    #     message['From'] ='travelbuddy4geeks@gmail.com'
+    #     message['To'] = email_receiver
+
+    #     try:
+    #         context = ssl.create_default_context()
+    #         with smtplib.SMTP_SSL('smtp.sendgrid.net', 465, context=context) as server:
+    #             server.login('apikey', SENDGRID_API_KEY)
+    #             server.send_message(message)
+    #         print("Password reset link sent to email.")
+    #         print("Generated reset token:", reset_token)
+    #         print("User reset token:", user.reset_token)
+    #         return "Ok, Password reset link sent to email.", 200
+    #     except Exception as e:
+    #         print(f"Error sending email: {e}")
+    #         return jsonify({'error': str(e)}), 500
+
+    # except Exception as e:
+    #     import traceback
+    #     traceback.print_exc()
+    #     print(f"An error occurred: {e}")
+    #     return jsonify({'error': str(e)}), 500
+
+    
+@api.route('/validatepasswordresettoken', methods=['POST'])
+def validate_password_reset_token():
+    print("Endpoint called.")
+    try:
+        body = request.get_json()
+        token = body.get("token")
+
+        if not token:
+            return jsonify({"message": "Token is required."}), 400
+
+        try:
+           
+            print("Received token:", token)
+            
+            decode_token(token)
+            print("Token decoded successfully.")
+
+            return jsonify({"message": "Token is valid."}), 200
+        except Exception as e:
+            print("Error decoding token:", str(e))
+            return jsonify({"message": "Invalid or expired token."}), 401
+
+    except Exception as e:
+        print("Error processing token:", str(e))
+        return jsonify({'error': str(e)}), 500
+
+
+from urllib.parse import unquote
+
+@api.route("/resetpassword", methods=['POST'])
+def resetPassword():
+    try:
+        body = request.get_json()
+        password = body.get("password")
+        token = body.get("token")
+
+        if not password or not token:
+            return jsonify({"message": "Password and token are required."}), 400
+
+        try:
+            
+            decoded_token = decode_token(token)
+        except Exception as e:
+            print(f"Error decoding token: {e}")
+            return jsonify({"message": "Invalid or expired token."}), 401
+
+        
+        sub_claim = decoded_token.get('sub')
+        user_email = sub_claim.get('email')  
+
+        
+        user = User.query.filter_by(email=user_email).first()
+        if not user:
+            print(f"User not found. User Email: {user_email}")
+            return jsonify({"message": "User not found. Please request another password reset."}), 404
+
+        
+        stored_token = user.reset_token
+        decoded_token_unquoted = unquote(token)
+        print(f"Length of decoded_token_unquoted: {len(decoded_token_unquoted)}")
+        print(f"Length of stored_token: {len(stored_token)}")
+        print(f"Received reset token: {decoded_token_unquoted}")
+        print(f"Stored reset token: {stored_token}")
+
+        # if stored_token is None or not secrets.compare_digest(stored_token, decoded_token_unquoted):
+        #     print(f"Invalid reset token. Stored token: {stored_token}")
+        #     return jsonify({"message": "Invalid reset token. Please request another password reset."}), 401
+
+        decoded_exp = decoded_token['exp']
+        current_time = datetime.utcnow().timestamp()
+
+        if decoded_exp < current_time:
+            print(f"Reset token has expired. Expiry time: {decoded_exp}")
+            return jsonify({"message": "Reset token has expired. Please request another password reset."}), 401
+
+        
+        user.password = password
+        user.reset_token = None  
+        db.session.commit()
+
+        return jsonify({"message": "Password reset successfully."}), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+
+@api.route('/forgotpassword', methods=['POST'])
+def send_link():
+
+    email = request.get_json()["email"]
+    token = create_access_token(identity=email)  
+    send_email(f"https://automatic-zebra-66qj6qjrxr4frqqg-3000.app.github.dev/validateresetpassword/{token}", email)
+
+    return jsonify(email), 200
+
